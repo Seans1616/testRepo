@@ -1,1 +1,58 @@
-#test123
+from flask import Flask, request, redirect, render_template_string
+import sqlite3
+import os
+import subprocess
+
+app = Flask(__name__)
+
+# Insecure database configuration - hardcoded credentials
+DB_USER = "admin"
+DB_PASS = "password123"  # Never do this in real code
+DB_NAME = "test.db"
+
+@app.route('/search')
+def search():
+    # SQL Injection vulnerability
+    query = request.args.get('q', '')
+    conn = sqlite3.connect('test.db')
+    c = conn.cursor()
+    # WARNING: Do not use string formatting for SQL queries in real code!
+    c.execute(f"SELECT * FROM users WHERE name LIKE '%{query}%'")
+    results = c.fetchall()
+    return str(results)
+
+@app.route('/template')
+def template():
+    # Server-Side Template Injection vulnerability
+    user_input = request.args.get('name', '')
+    # WARNING: Never render user input as a template in real code!
+    return render_template_string("Hello " + user_input)
+
+@app.route('/file')
+def file():
+    # Path Traversal vulnerability
+    filename = request.args.get('name', '')
+    # WARNING: Never directly use user input in file operations!
+    with open(filename, 'r') as f:
+        content = f.read()
+    return content
+
+@app.route('/ping')
+def ping():
+    # Command Injection vulnerability
+    host = request.args.get('host', 'localhost')
+    # WARNING: Never use user input directly in command execution!
+    result = subprocess.check_output(f'ping -c 1 {host}', shell=True)
+    return result
+
+@app.route('/redirect')
+def unsafe_redirect():
+    # Open Redirect vulnerability
+    url = request.args.get('url', '')
+    # WARNING: Never redirect to unvalidated URLs!
+    return redirect(url)
+
+if __name__ == '__main__':
+    # Insecure configuration
+    app.config['SECRET_KEY'] = 'supersecret'  # Never hardcode secrets
+    app.run(debug=True, host='0.0.0.0')  # Debug mode should not be enabled in production

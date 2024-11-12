@@ -1,0 +1,63 @@
+name: OSSF Scorecard
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'GitHub repository to analyze (format: owner/repo)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to analyze (default: main)'
+        required: false
+        default: 'main'
+        type: string
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+
+jobs:
+  scorecard:
+    name: Run OSSF Scorecard
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate input
+        run: |
+          if [[ ! "${{ github.event.inputs.repository }}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "Invalid repository format. Please use owner/repo format."
+            exit 1
+          fi
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          repo: ${{ github.event.inputs.repository }}
+          branch: ${{ github.event.inputs.branch }}
+          # Read-only PAT token with public repo access
+          repo_token: ${{ secrets.SCORECARD_TOKEN }}
+          # Publish results to enable scorecard badges
+          publish_results: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ github.event.inputs.repository }}-scorecard
+          path: results.sarif
+          retention-days: 5
+
+      - name: Generate Summary
+        run: |
+          echo "# Security Scorecard Results" >> $GITHUB_STEP_SUMMARY
+          echo "Repository: ${{ github.event.inputs.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.event.inputs.branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "Download the SARIF file artifact for detailed results." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
+          category: "scorecard/${{ github.event.inputs.repository }}"
